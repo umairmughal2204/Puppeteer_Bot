@@ -1,0 +1,22 @@
+{
+  "name": "pupeter-phase1-prototype",
+  "version": "0.1.0",
+  "description": "Config-driven Puppeteer session collector and action runner prototype.",
+  "type": "module",
+  "main": "src/controller.js",
+  "scripts": {
+    "start": "node src/controller.js start",
+    "demo": "node scripts/demo.js",
+    "status": "node src/controller.js status"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "fs-extra": "^11.2.0",
+    "puppeteer": "^22.12.0",
+    "uuid": "^9.0.1",
+    "yargs": "^17.7.2"
+  }
+}
+

@@ -1,0 +1,15 @@
+[
+  {
+    "id": "demo-example",
+    "startUrl": "https://example.com"
+  },
+  {
+    "id": "iana-domains",
+    "startUrl": "https://www.iana.org/domains/example"
+  },
+  {
+    "id": "httpbin-cookies",
+    "startUrl": "https://httpbin.org/cookies/set/demo-cookie/12345"
+  }
+]
+

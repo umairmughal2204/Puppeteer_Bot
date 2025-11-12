@@ -1,0 +1,38 @@
+{
+  "collectorsCount": 2,
+  "visibleCount": 1,
+  "collectorTimeoutSec": 120,
+  "actionTimeoutSec": 180,
+  "staggerDelayMs": 2500,
+  "blockResources": {
+    "images": true,
+    "media": true,
+    "thirdParty": false
+  },
+  "sessionRetentionHours": 24,
+  "userDataDirBase": "./tmp/user-data",
+  "defaultViewport": {
+    "width": 1366,
+    "height": 768
+  },
+  "fingerprint": {
+    "userAgents": [
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Safari/605.1.15"
+    ],
+    "languages": [
+      ["en-US", "en"],
+      ["en-GB", "en", "fr"],
+      ["es-ES", "es"]
+    ],
+    "timezoneIds": [
+      "America/New_York",
+      "Europe/London",
+      "America/Chicago",
+      "Europe/Berlin"
+    ],
+    "hardwareConcurrencyRange": [4, 12],
+    "deviceMemoryRange": [4, 16]
+  }
+}
+

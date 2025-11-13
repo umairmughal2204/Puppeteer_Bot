@@ -2,6 +2,7 @@
   "demo-example": [
     { "type": "wait", "ms": 1500 },
     { "type": "scroll", "distance": 600, "durationMs": 1500 },
+    { "type": "hover", "selector": "h1" },
     { "type": "screenshot", "filename": "after-scroll.png" }
   ],
   "iana-domains": [
@@ -13,7 +14,17 @@
   ],
   "httpbin-cookies": [
     { "type": "wait", "ms": 1500 },
+    { "type": "hover", "selector": "body" },
     { "type": "screenshot", "filename": "cookie-page.png" }
+  ],
+  "itscoupons-admin": [
+    { "type": "wait", "ms": 2000 },
+    { "type": "type", "selector": "input[name='email']", "text": "support@itscoupons.com", "clear": true },
+    { "type": "type", "selector": "input[name='password']", "text": "123", "clear": true },
+    { "type": "click", "selector": "button[type='submit']", "human": true },
+    { "type": "wait", "ms": 4000 },
+    { "type": "scroll", "distance": 800, "durationMs": 1500 },
+    { "type": "screenshot", "filename": "dashboard.png" }
   ]
 }
 

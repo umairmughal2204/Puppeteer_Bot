@@ -1,12 +1,12 @@
 import path from "node:path";
 import fs from "fs-extra";
 import { fileURLToPath } from "node:url";
-import { v4 as uuidv4 } from "uuid";
+import { setTimeout as delay } from "node:timers/promises";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { runCollector } from "./collector.js";
 import { runAction } from "./action.js";
-import { pruneOldSessions } from "./sessionManager.js";
+import { ensureDirectory, pruneOldSessions, resolveRunDir } from "./sessionManager.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, "..");
@@ -69,14 +69,26 @@ async function runWithConcurrency(items, limit, iterator) {
   return results;
 }
 
-function buildCollectorPlan(count, sites) {
+function buildCollectorPlan(count, sites, startSequence) {
   const plan = [];
   for (let i = 0; i < count; i += 1) {
-    const site = sites[i % sites.length];
-    const profileId = `${site.id}-${uuidv4()}`;
+    const site = sites[(startSequence + i) % sites.length];
+    const profileId = String(startSequence + i + 1).padStart(4, "0");
     plan.push({ profileId, site });
   }
   return plan;
+}
+
+function computeCycleCount(durationSec, swapSec) {
+  if (!durationSec || durationSec <= 0 || !swapSec || swapSec <= 0) {
+    return 1;
+  }
+  return Math.max(1, Math.ceil(durationSec / swapSec));
+}
+
+function generateRunId() {
+  const iso = new Date().toISOString().replace(/[-:]/g, "").replace("T", "-");
+  return `run-${iso.slice(0, 15)}`;
 }
 
 async function startCommand(argv) {
@@ -86,68 +98,161 @@ async function startCommand(argv) {
   const visibleCount = Number(argv.visible ?? settings.visibleCount ?? 0);
   const runOnce = Boolean(argv["run-once"]);
   const headlessActions = Boolean(argv["headless-actions"]);
+  const overrideCollectorCycles =
+    argv["collector-cycles"] !== undefined ? Number(argv["collector-cycles"]) : undefined;
+  const overrideActionCycles = argv["action-cycles"] !== undefined ? Number(argv["action-cycles"]) : undefined;
+  const runId = (typeof argv["run-id"] === "string" && argv["run-id"].trim().length > 0) ? argv["run-id"].trim() : generateRunId();
+
+  await ensureDirectory(resolveRunDir(settings, runId));
+  await pruneOldSessions(settings);
 
   settings.collectorsCount = collectorsCount;
   settings.visibleCount = visibleCount;
 
-  const plan = buildCollectorPlan(collectorsCount, sites);
-  const maxCollectorConcurrency = Math.min(settings.maxCollectorConcurrency ?? 5, plan.length || 1);
+  const schedulingEnabled = settings.enableScheduling && !runOnce;
+  const collectorCyclesDefault = schedulingEnabled
+    ? computeCycleCount(settings.collectorSessionDurationSec, settings.collectorSwapIntervalSec)
+    : 1;
+  const actionCyclesDefault = schedulingEnabled
+    ? computeCycleCount(settings.actionSessionDurationSec, settings.actionSwapIntervalSec)
+    : 1;
+
+  const collectorCycles =
+    Number.isFinite(overrideCollectorCycles) && overrideCollectorCycles > 0
+      ? overrideCollectorCycles
+      : collectorCyclesDefault;
+  const actionCycles =
+    Number.isFinite(overrideActionCycles) && overrideActionCycles > 0
+      ? overrideActionCycles
+      : actionCyclesDefault;
+
+  const maxCollectorConcurrency = Math.min(settings.maxCollectorConcurrency ?? 5, collectorsCount || 1);
+  const maxActionConcurrency = Math.min(settings.maxActionConcurrency ?? 2, visibleCount || 1);
 
   const staggerDelayMs = settings.staggerDelayMs ?? 2000;
 
   await saveState({
     status: "starting",
+    runId,
     collectorsCount,
     visibleCount,
     startedAt: new Date().toISOString()
   });
 
-  console.log(`[controller] starting ${collectorsCount} collector(s) with concurrency ${maxCollectorConcurrency}`);
+  console.log(
+    `[controller] run ${runId} starting with ${collectorsCount} collectors (${collectorCycles} cycle(s)) and ${visibleCount} visible actions (${actionCycles} cycle(s))`
+  );
 
-  let index = 0;
-  const collectorResults = await runWithConcurrency(plan, maxCollectorConcurrency, async (entry) => {
-    const result = await runCollector(entry.profileId, entry.site, settings);
-    await new Promise((resolve) => setTimeout(resolve, staggerDelayMs));
-    return { ...entry, ...result };
-  });
+  const collectorResults = [];
+  const successfulSessions = [];
+  let profileSequence = 0;
 
-  const successfulCollectors = collectorResults.filter((result) => result.status === "ok");
-  console.log(`[controller] collectors complete. success=${successfulCollectors.length} error=${collectorResults.length - successfulCollectors.length}`);
+  for (let cycle = 0; cycle < collectorCycles; cycle += 1) {
+    const plan = buildCollectorPlan(collectorsCount, sites, profileSequence);
+    profileSequence += plan.length;
+    const concurrency = Math.max(1, Math.min(maxCollectorConcurrency, plan.length));
+    console.log(
+      `[controller] collector cycle ${cycle + 1}/${collectorCycles}: launching ${plan.length} worker(s) at concurrency ${concurrency}`
+    );
 
-  let actionResults = [];
-  if (visibleCount > 0 && successfulCollectors.length > 0) {
-    const actionPlan = successfulCollectors.slice(0, visibleCount).map((collector, idx) => ({
-      profileId: collector.profileId,
-      site: collector.site,
-      steps: actions[collector.site.id] ?? [],
-      index: idx
-    }));
-
-    const actionConcurrency = Math.min(settings.maxActionConcurrency ?? 2, actionPlan.length || 1);
-    console.log(`[controller] starting ${actionPlan.length} action worker(s) with concurrency ${actionConcurrency}`);
-    actionResults = await runWithConcurrency(actionPlan, actionConcurrency, async (entry) => {
-      return runAction({
+    const results = await runWithConcurrency(plan, concurrency, async (entry) => {
+      const outcome = await runCollector({
         profileId: entry.profileId,
         site: entry.site,
         settings,
-        steps: entry.steps,
-        index: entry.index,
-        headlessOverride: headlessActions
+        runId
       });
+      if (staggerDelayMs > 0) {
+        await delay(staggerDelayMs);
+      }
+      return { cycle, ...entry, ...outcome };
     });
+
+    collectorResults.push(...results);
+    const successes = results.filter((result) => result.status === "ok");
+    successfulSessions.push(
+      ...successes.map((result) => ({
+        profileId: result.profileId,
+        site: result.site,
+        sessionDir: result.sessionDir
+      }))
+    );
+    console.log(
+      `[controller] collector cycle ${cycle + 1} complete. success=${successes.length} error=${results.length - successes.length}`
+    );
+
+    if (cycle < collectorCycles - 1 && settings.collectorSwapIntervalSec) {
+      await delay(settings.collectorSwapIntervalSec * 1000);
+    }
   }
+
+  const actionResults = [];
+  if (visibleCount > 0 && successfulSessions.length > 0) {
+    const windowsPerCycle = Math.min(visibleCount, successfulSessions.length);
+    for (let cycle = 0; cycle < actionCycles; cycle += 1) {
+      const actionPlan = [];
+      for (let i = 0; i < windowsPerCycle; i += 1) {
+        const session = successfulSessions[(cycle * windowsPerCycle + i) % successfulSessions.length];
+        actionPlan.push({
+          cycle,
+          profileId: session.profileId,
+          site: session.site,
+          steps: actions[session.site.id] ?? [],
+          index: i
+        });
+      }
+      const actionConcurrency = Math.max(1, Math.min(maxActionConcurrency, actionPlan.length));
+      console.log(
+        `[controller] action cycle ${cycle + 1}/${actionCycles}: launching ${actionPlan.length} window(s) at concurrency ${actionConcurrency}`
+      );
+
+      const results = await runWithConcurrency(actionPlan, actionConcurrency, async (entry) => {
+        const outcome = await runAction({
+          profileId: entry.profileId,
+          site: entry.site,
+          settings,
+          steps: entry.steps,
+          index: entry.index,
+          runId,
+          headlessOverride: headlessActions
+        });
+        return { ...entry, ...outcome };
+      });
+
+      actionResults.push(...results);
+      if (cycle < actionCycles - 1 && settings.actionSwapIntervalSec) {
+        await delay(settings.actionSwapIntervalSec * 1000);
+      }
+    }
+  } else {
+    console.log("[controller] skipping action cycles (no sessions available or visibleCount set to 0).");
+  }
+
+  const serializeResult = (result) => {
+    if (!result) return result;
+    const serialized = { ...result };
+    if (serialized.error instanceof Error) {
+      serialized.error = serialized.error.message;
+    } else if (serialized.error && typeof serialized.error !== "string") {
+      serialized.error = String(serialized.error);
+    }
+    return serialized;
+  };
 
   await saveState({
     status: "idle",
-    collectors: collectorResults,
-    actions: actionResults,
+    runId,
+    collectors: collectorResults.map(serializeResult),
+    actions: actionResults.map(serializeResult),
+    collectorsCount,
+    visibleCount,
     completedAt: new Date().toISOString()
   });
 
-  console.log("[controller] run complete.");
+  console.log(`[controller] run ${runId} complete.`);
 
-  if (!runOnce) {
-    console.log("[controller] exiting. Use --run-once=false with a supervisor to schedule repeated runs.");
+  if (!runOnce && schedulingEnabled) {
+    console.log("[controller] scheduling disabled for prototype after first run. Re-launch to continue cycles.");
   }
 }
 
@@ -166,8 +271,7 @@ async function statusCommand() {
 
 async function pruneCommand() {
   const { settings } = await loadConfigs();
-  const sessionsDir = path.resolve(rootDir, settings.sessionsDir ?? "sessions");
-  await pruneOldSessions(sessionsDir, settings.sessionRetentionHours ?? 0);
+  await pruneOldSessions(settings);
   console.log("[controller] prune complete.");
 }
 
@@ -194,6 +298,18 @@ const cli = yargs(hideBin(process.argv))
           describe: "Run action workers headless (testing only)",
           type: "boolean",
           default: false
+        })
+        .option("run-id", {
+          describe: "Custom identifier for the run (default uses timestamp)",
+          type: "string"
+        })
+        .option("collector-cycles", {
+          describe: "Override number of collector swap cycles",
+          type: "number"
+        })
+        .option("action-cycles", {
+          describe: "Override number of action swap cycles",
+          type: "number"
         }),
     (argv) => {
       startCommand(argv).catch((err) => {

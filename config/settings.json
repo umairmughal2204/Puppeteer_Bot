@@ -1,38 +1,127 @@
 {
-  "collectorsCount": 2,
-  "visibleCount": 1,
-  "collectorTimeoutSec": 120,
-  "actionTimeoutSec": 180,
+  "sessionsDir": "./sessions",
+  "collectorsCount": 40,
+  "visibleCount": 10,
+  "collectorTimeoutSec": 150,
+  "actionTimeoutSec": 200,
+  "collectorSessionDurationSec": 1800,
+  "collectorSwapIntervalSec": 600,
+  "actionSessionDurationSec": 1800,
+  "actionSwapIntervalSec": 900,
+  "collectorIdleDelayRange": [1200, 2600],
+  "actionIdleDelayRange": [800, 1800],
+  "enableScheduling": true,
   "staggerDelayMs": 2500,
+  "maxCollectorConcurrency": 12,
+  "maxActionConcurrency": 6,
   "blockResources": {
     "images": true,
     "media": true,
     "thirdParty": false
   },
-  "sessionRetentionHours": 24,
+  "sessionRetentionHours": 48,
   "userDataDirBase": "./tmp/user-data",
   "defaultViewport": {
-    "width": 1366,
-    "height": 768
+    "width": 1440,
+    "height": 900
   },
   "fingerprint": {
     "userAgents": [
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Safari/605.1.15"
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Safari/605.1.15",
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    ],
+    "platforms": [
+      "Win32",
+      "MacIntel",
+      "Linux x86_64"
+    ],
+    "vendors": [
+      "Google Inc.",
+      "Apple Computer, Inc.",
+      "Mozilla Foundation"
     ],
     "languages": [
       ["en-US", "en"],
       ["en-GB", "en", "fr"],
-      ["es-ES", "es"]
+      ["es-ES", "es"],
+      ["de-DE", "de", "en"]
     ],
     "timezoneIds": [
       "America/New_York",
-      "Europe/London",
       "America/Chicago",
-      "Europe/Berlin"
+      "Europe/London",
+      "Europe/Berlin",
+      "Asia/Tokyo"
+    ],
+    "doNotTrackOptions": ["1", "0", null],
+    "screenResolutions": [
+      { "width": 1920, "height": 1080 },
+      { "width": 1680, "height": 1050 },
+      { "width": 1440, "height": 900 }
+    ],
+    "devicePixelRatios": [1, 1.25, 1.5, 2],
+    "windowBounds": [
+      { "outerWidth": 1440, "outerHeight": 900, "innerWidth": 1280, "innerHeight": 800 },
+      { "outerWidth": 1600, "outerHeight": 900, "innerWidth": 1366, "innerHeight": 820 },
+      { "outerWidth": 1920, "outerHeight": 1080, "innerWidth": 1536, "innerHeight": 864 }
     ],
     "hardwareConcurrencyRange": [4, 12],
-    "deviceMemoryRange": [4, 16]
+    "deviceMemoryRange": [4, 16],
+    "canvasFingerprints": [
+      { "vendor": "Intel Inc.", "renderer": "Intel Iris OpenGL Engine", "seed": "8dc2a7" },
+      { "vendor": "NVIDIA Corporation", "renderer": "NVIDIA GeForce GTX 1650", "seed": "9acb21" },
+      { "vendor": "AMD", "renderer": "AMD Radeon Pro 560X", "seed": "3f17ce" }
+    ],
+    "plugins": [
+      [
+        { "name": "Chrome PDF Viewer", "filename": "internal-pdf-viewer", "description": "Portable Document Format" },
+        { "name": "Chrome PDF Plugin", "filename": "internal-pdf-viewer", "description": "Portable Document Format" }
+      ],
+      [
+        { "name": "Widevine Content Decryption Module", "filename": "widevinecdmadapter.dll", "description": "Enables DRM protected content" }
+      ]
+    ],
+    "mimeTypes": [
+      [
+        { "type": "application/pdf", "suffixes": "pdf", "description": "Portable Document Format" }
+      ],
+      [
+        { "type": "application/x-google-chrome-pdf", "suffixes": "pdf", "description": "Portable Document Format" }
+      ]
+    ],
+    "mediaDevices": [
+      [
+        { "kind": "audioinput", "label": "Microphone (Realtek)", "deviceId": "default" },
+        { "kind": "audiooutput", "label": "Speakers (Realtek)", "deviceId": "default" },
+        { "kind": "videoinput", "label": "Integrated Camera", "deviceId": "camera-1" }
+      ],
+      [
+        { "kind": "audioinput", "label": "Headset Microphone", "deviceId": "mic-2" },
+        { "kind": "audiooutput", "label": "Headphones", "deviceId": "speaker-2" }
+      ]
+    ],
+    "permissions": [
+      {
+        "geolocation": "prompt",
+        "notifications": "denied",
+        "camera": "prompt",
+        "microphone": "prompt",
+        "clipboard-read": "granted"
+      },
+      {
+        "geolocation": "granted",
+        "notifications": "default",
+        "camera": "denied",
+        "microphone": "prompt",
+        "clipboard-read": "prompt"
+      }
+    ],
+    "batteryProfiles": [
+      { "charging": true, "level": 0.84, "chargingTime": 1200, "dischargingTime": null },
+      { "charging": false, "level": 0.56, "chargingTime": null, "dischargingTime": 3600 }
+    ],
+    "maxTouchPoints": [0, 1, 5]
   }
 }
 

@@ -8,12 +8,27 @@ import { setTimeout as delay } from "node:timers/promises";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, "..");
 const sessionsDir = join(rootDir, "sessions");
+const runId = `demo-${Date.now()}`;
 
 async function runControllerStart() {
-  console.log("[demo] starting controller (2 collectors / 1 visible)...");
-  await spawnCommand("node", ["src/controller.js", "start", "--collectors=2", "--visible=1", "--run-once"], {
-    cwd: rootDir
-  });
+  console.log("[demo] starting controller (3 collectors / 1 visible)...");
+  await spawnCommand(
+    "node",
+    [
+      "src/controller.js",
+      "start",
+      "--collectors=3",
+      "--visible=1",
+      "--collector-cycles=1",
+      "--action-cycles=1",
+      "--run-id",
+      runId,
+      "--run-once"
+    ],
+    {
+      cwd: rootDir
+    }
+  );
 }
 
 async function spawnCommand(cmd, args, options = {}) {
@@ -35,12 +50,13 @@ async function spawnCommand(cmd, args, options = {}) {
 
 async function listSessions() {
   try {
-    const entries = await fs.readdir(sessionsDir, { withFileTypes: true });
+    const runPath = join(sessionsDir, runId);
+    const entries = await fs.readdir(runPath, { withFileTypes: true });
     const sessionFolders = entries.filter((entry) => entry.isDirectory());
-    console.log(`[demo] found ${sessionFolders.length} session folder(s).`);
+    console.log(`[demo] run ${runId} produced ${sessionFolders.length} session folder(s).`);
     let successCount = 0;
     for (const folder of sessionFolders) {
-      const folderPath = join(sessionsDir, folder.name);
+      const folderPath = join(runPath, folder.name);
       const files = await fs.readdir(folderPath);
       console.log(` - ${folder.name}: ${files.join(", ")}`);
       if (files.includes("cookies.json") && files.includes("localStorage.json")) {
@@ -54,7 +70,7 @@ async function listSessions() {
     }
   } catch (err) {
     if (err.code === "ENOENT") {
-      console.log("[demo] sessions directory not created yet.");
+      console.log(`[demo] run directory ${runId} not created yet.`);
     } else {
       console.error("[demo] error listing sessions", err);
     }
@@ -67,6 +83,7 @@ async function main() {
   console.log("[demo] waiting for collectors/actions to finish...");
   await delay(5000);
   await listSessions();
+  await spawnCommand("node", ["src/controller.js", "status"], { cwd: rootDir });
   console.log("[demo] demo workflow complete.");
 }
 

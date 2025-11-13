@@ -27,9 +27,9 @@ sessions/        Output directory for collected browser sessions
 
 1. **Collect and Replay (demo)**
    ```bash
-   node src/controller.js start --collectors=2 --visible=1
+   node src/controller.js start --collectors=3 --visible=1 --collector-cycles=1 --action-cycles=1 --run-once
    ```
-   - Collectors run headless and persist session artifacts under `sessions/{profileId}`.
+   - Collectors run headless and persist session artifacts under `sessions/<run-id>/<profileId>`.
    - A headful action worker tiles its window, loads a saved session, and executes configured actions.
 
 2. **Check Status**
@@ -55,6 +55,8 @@ Runs a short acceptance workflow: starts two collectors and one visible session,
 - `config/settings.json` — concurrency, timeouts, resource blocking, fingerprint pools.
 - `config/sites.json` — array of `{ id, startUrl }`.
 - `config/actions.json` — mapping `{ siteId: [steps...] }`.
+- Site entries support optional `resourcePolicy` with `allowedResourceTypes` / `blockedResourceTypes` per origin.
+- Action steps support `wait`, `scroll`, `hover`, `click`, `type`, and `screenshot`.
 
 Examples are provided and safe for public use.
 
@@ -63,6 +65,8 @@ Examples are provided and safe for public use.
 - `--collectors=<n>` — override number of collectors.
 - `--visible=<m>` — override number of visible action workers.
 - `--headless-actions` — run actions headless (local testing only).
+- `--collector-cycles`, `--action-cycles` — override swap cycles derived from scheduling config.
+- `--run-id=<name>` — set explicit run directory name (`sessions/<run-id>/<profileId>`).
 
 ## Session Artifacts
 
@@ -79,9 +83,11 @@ Action workers update the same folder with new artifacts (screenshots, updated s
 
 No stealth plugins are used. Instead, custom fingerprinting adjusts:
 
-- `userAgent`, `viewport`, `languages`, `timezone`
-- `hardwareConcurrency`, `deviceMemory`
-- Removes `navigator.webdriver`, patches `chrome.runtime`, softens `permissions` API responses.
+- Identity: `userAgent`, `platform`, `vendor`, languages, `doNotTrack`, timezone.
+- Hardware: `hardwareConcurrency`, `deviceMemory`, `maxTouchPoints`, battery and permissions states.
+- Display: viewport, devicePixelRatio, screen and window bounds, `outerWidth/innerHeight`.
+- Graphics: WebGL vendor/renderer, deterministic canvas perturbation.
+- Browser APIs: plugins, mimeTypes, mediaDevices, permissions, connection, `navigator.webdriver` removal.
 
 Adjust values in `config/settings.json` to rotate fingerprints safely.
 
@@ -96,6 +102,7 @@ Adjust values in `config/settings.json` to rotate fingerprints safely.
 - `scripts/demo.js` produces at least two populated session folders.
 - `node src/controller.js start --visible=1` opens real browser windows in a grid arrangement.
 - Editing `config/actions.json` changes the executed visible steps without code changes.
+- Scheduling durations (`collectorSessionDurationSec`, `collectorSwapIntervalSec`, etc.) can be tuned without modifying code.
 
 ## License
 

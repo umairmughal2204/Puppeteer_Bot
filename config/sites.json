@@ -1,15 +1,31 @@
 [
   {
     "id": "demo-example",
-    "startUrl": "https://example.com"
+    "startUrl": "https://example.com",
+    "resourcePolicy": {
+      "allowedResourceTypes": ["document", "script", "xhr", "fetch"]
+    }
   },
   {
     "id": "iana-domains",
-    "startUrl": "https://www.iana.org/domains/example"
+    "startUrl": "https://www.iana.org/domains/example",
+    "resourcePolicy": {
+      "blockedResourceTypes": ["media", "font"]
+    }
   },
   {
     "id": "httpbin-cookies",
-    "startUrl": "https://httpbin.org/cookies/set/demo-cookie/12345"
+    "startUrl": "https://httpbin.org/cookies/set/demo-cookie/12345",
+    "resourcePolicy": {
+      "allowedResourceTypes": ["document", "script"]
+    }
+  },
+  {
+    "id": "itscoupons-admin",
+    "startUrl": "https://www.itscoupons.com/auth/login",
+    "resourcePolicy": {
+      "allowedResourceTypes": ["document", "script", "stylesheet", "xhr", "fetch"]
+    }
   }
 ]
 

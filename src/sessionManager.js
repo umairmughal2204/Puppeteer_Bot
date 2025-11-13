@@ -1,12 +1,29 @@
 import fs from "fs-extra";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-export async function ensureSessionDir(sessionDir) {
-  await fs.mkdir(sessionDir, { recursive: true });
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const rootDir = path.join(__dirname, "..");
+
+export function resolveSessionsBaseDir(settings) {
+  return path.resolve(rootDir, settings.sessionsDir ?? "./sessions");
+}
+
+export function resolveRunDir(settings, runId) {
+  const baseDir = resolveSessionsBaseDir(settings);
+  return path.join(baseDir, runId);
+}
+
+export function resolveSessionDir(settings, runId, profileId) {
+  return path.join(resolveRunDir(settings, runId), profileId);
+}
+
+export async function ensureDirectory(dirPath) {
+  await fs.mkdir(dirPath, { recursive: true });
 }
 
 export async function saveSession(page, sessionDir, { includeHar = false } = {}) {
-  await ensureSessionDir(sessionDir);
+  await ensureDirectory(sessionDir);
 
   const client = await page.target().createCDPSession();
   const cookies = (await client.send("Network.getAllCookies")).cookies ?? [];
@@ -103,7 +120,9 @@ export async function applySavedStorage(page, session, originUrl) {
   );
 }
 
-export async function pruneOldSessions(baseDir, maxAgeHours) {
+export async function pruneOldSessions(settings) {
+  const baseDir = resolveSessionsBaseDir(settings);
+  const maxAgeHours = settings.sessionRetentionHours ?? 0;
   if (!maxAgeHours || maxAgeHours <= 0) return;
   const now = Date.now();
   const entries = await fs.readdir(baseDir, { withFileTypes: true }).catch(() => []);
@@ -119,5 +138,11 @@ export async function pruneOldSessions(baseDir, maxAgeHours) {
         }
       })
   );
+}
+
+export async function listSessions(settings, runId) {
+  const runDir = resolveRunDir(settings, runId);
+  const entries = await fs.readdir(runDir, { withFileTypes: true }).catch(() => []);
+  return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
 }
 

@@ -1,23 +1,15 @@
 import path from "node:path";
 import puppeteer from "puppeteer";
-import { fileURLToPath } from "node:url";
 import { buildFingerprint, applyFingerprint } from "./fingerprint.js";
-import { restoreSession, applySavedStorage, saveSession, ensureSessionDir } from "./sessionManager.js";
-import { humanClick, humanScroll, humanType, waitMs } from "./humanize.js";
+import { resolveSessionDir, restoreSession, applySavedStorage, saveSession, ensureDirectory } from "./sessionManager.js";
+import { humanClick, humanHover, humanScroll, humanType, waitMs } from "./humanize.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const rootDir = path.join(__dirname, "..");
-
-function getSessionsBaseDir(settings) {
-  return path.resolve(rootDir, settings.sessionsDir ?? "sessions");
-}
-
-function computeWindowArgs(index, settings) {
+function computeWindowArgs(index, settings, viewport) {
   const cols = Math.ceil(Math.sqrt(settings.visibleCount || 1));
   const rows = Math.ceil((settings.visibleCount || 1) / cols);
-  const viewport = settings.defaultViewport ?? { width: 1280, height: 720 };
-  const windowWidth = viewport.width + 16; // allow chrome borders
-  const windowHeight = viewport.height + 88; // allow toolbar
+  const view = viewport ?? settings.defaultViewport ?? { width: 1280, height: 720 };
+  const windowWidth = view.width + 16;
+  const windowHeight = view.height + 88;
 
   const col = index % cols;
   const row = Math.floor(index / cols);
@@ -39,6 +31,10 @@ async function performActionStep(page, sessionDir, step) {
       if (!step.selector) throw new Error("click action requires selector");
       await humanClick(page, step.selector, { afterDelayMs: step.afterDelayMs });
       break;
+    case "hover":
+      if (!step.selector) throw new Error("hover action requires selector");
+      await humanHover(page, step.selector, step.dwellMs ?? 600);
+      break;
     case "type":
       if (!step.selector || typeof step.text !== "string") {
         throw new Error("type action requires selector and text");
@@ -56,15 +52,14 @@ async function performActionStep(page, sessionDir, step) {
   }
 }
 
-export async function runAction({ profileId, site, settings, steps, index = 0, headlessOverride = null }) {
-  const sessionsDir = getSessionsBaseDir(settings);
-  const sessionDir = path.join(sessionsDir, profileId);
-  await ensureSessionDir(sessionDir);
+export async function runAction({ profileId, site, settings, steps, index = 0, runId, headlessOverride = null }) {
+  const sessionDir = resolveSessionDir(settings, runId, profileId);
+  await ensureDirectory(sessionDir);
 
-  const fingerprint = buildFingerprint(settings);
   const session = await restoreSession(sessionDir);
+  const fingerprint = buildFingerprint(settings, session.meta?.fingerprint ?? null);
 
-  const windowArgs = computeWindowArgs(index, settings);
+  const windowArgs = computeWindowArgs(index, settings, fingerprint.viewport);
 
   const launchOptions = {
     headless: headlessOverride ?? false,
@@ -81,7 +76,7 @@ export async function runAction({ profileId, site, settings, steps, index = 0, h
   };
 
   if (settings.userDataDirBase) {
-    launchOptions.userDataDir = path.resolve(settings.userDataDirBase, `action-${profileId}`);
+    launchOptions.userDataDir = path.resolve(settings.userDataDirBase, `${runId}-action-${profileId}`);
   }
 
   let browser;

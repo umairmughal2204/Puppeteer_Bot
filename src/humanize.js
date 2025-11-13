@@ -28,6 +28,21 @@ export async function moveMouseSmooth(page, targetX, targetY, steps = 20) {
   }
 }
 
+export async function humanHover(page, selector, dwellMs = 600) {
+  const element = await page.$(selector);
+  if (!element) {
+    throw new Error(`Element not found for selector: ${selector}`);
+  }
+  const box = await element.boundingBox();
+  if (!box) {
+    throw new Error(`Cannot compute bounding box for selector: ${selector}`);
+  }
+  const targetX = box.x + box.width / 2 + randomBetween(-3, 3);
+  const targetY = box.y + box.height / 2 + randomBetween(-3, 3);
+  await moveMouseSmooth(page, targetX, targetY, Math.round(randomBetween(6, 14)));
+  await randomPause(dwellMs * 0.4, dwellMs);
+}
+
 export async function humanClick(page, selector, options = {}) {
   const element = await page.$(selector);
   if (!element) {

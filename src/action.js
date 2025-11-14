@@ -8,16 +8,43 @@ function computeWindowArgs(index, settings, viewport) {
   const cols = Math.ceil(Math.sqrt(settings.visibleCount || 1));
   const rows = Math.ceil((settings.visibleCount || 1) / cols);
   const view = viewport ?? settings.defaultViewport ?? { width: 1280, height: 720 };
-  const windowWidth = view.width + 16;
-  const windowHeight = view.height + 88;
+
+  const windowWidth = view.width + 16;      // chrome border
+  const windowHeight = view.height + 88;    // chrome top bar
 
   const col = index % cols;
   const row = Math.floor(index / cols);
-  const left = col * windowWidth;
-  const top = row * windowHeight;
 
-  return [`--window-size=${windowWidth},${windowHeight}`, `--window-position=${left},${top}`];
+  let left = col * windowWidth;
+  let top = row * windowHeight;
+
+  // Ensure valid visible position
+  const pos = safePosition(left, top, windowWidth, windowHeight);
+  left = pos.left;
+  top = pos.top;
+
+  return [
+    `--window-size=${windowWidth},${windowHeight}`,
+    `--window-position=${left},${top}`
+  ];
 }
+
+function safePosition(left, top, width, height) {
+  // Get screen resolution from puppeteer or OS defaults
+  const maxWidth = 1920;  
+  const maxHeight = 1080; 
+
+  // If window goes outside screen bounds, clamp it
+  if (left + width > maxWidth) left = Math.max(0, maxWidth - width);
+  if (top + height > maxHeight) top = Math.max(0, maxHeight - height);
+
+  // Prevent negative values
+  if (left < 0) left = 0;
+  if (top < 0) top = 0;
+
+  return { left, top };
+}
+
 
 async function performActionStep(page, sessionDir, step) {
   switch (step.type) {

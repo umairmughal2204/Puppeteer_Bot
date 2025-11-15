@@ -1,6 +1,6 @@
-# Puppeteer Session Collector Prototype
+# Puppeteer Session Collector Project
 
-Phase-1 prototype for a config-driven Puppeteer system that collects browser sessions and replays human-like actions.
+Phase-1 Config-driven Puppeteer system that collects browser sessions and replays human-like actions.
 
 ## Requirements
 
@@ -103,8 +103,3 @@ Adjust values in `config/settings.json` to rotate fingerprints safely.
 - `node src/controller.js start --visible=1` opens real browser windows in a grid arrangement.
 - Editing `config/actions.json` changes the executed visible steps without code changes.
 - Scheduling durations (`collectorSessionDurationSec`, `collectorSwapIntervalSec`, etc.) can be tuned without modifying code.
-
-## License
-
-Prototype for internal evaluation. No license granted.
-

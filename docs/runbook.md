@@ -1,4 +1,4 @@
-# Runbook: Puppeteer Collector/Action Prototype
+# Runbook: Puppeteer Collector/Action Project
 
 ## Overview
 
@@ -111,5 +111,5 @@ Scaling focuses on distributing workload while respecting host resource limits.
 - **Primary Operator:** Automation Team
 - **Escalation Path:** On-call engineer → Lead developer → Infra SRE
 
-Keep this document alongside the repository. Update host recommendations and troubleshooting tips as the prototype evolves.
+Keep this document alongside the repository. Update host recommendations and troubleshooting tips as the Project evolves.
 

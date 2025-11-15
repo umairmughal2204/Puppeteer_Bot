@@ -647,4 +647,4 @@ node src/controller.js start --sites=linkedin-login --visible=1 --run-once
 7. **Adjust selectors** if needed
 8. **Run production** mode
 
-Happy automating! 🚀
+Happy automating!

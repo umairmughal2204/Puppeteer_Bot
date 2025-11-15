@@ -21,6 +21,13 @@
     }
   },
   {
+    "id": "chatgpt-conversation",
+    "startUrl": "https://chatgpt.com",
+    "resourcePolicy": {
+      "allowedResourceTypes": ["document", "script", "stylesheet", "xhr", "fetch"]
+    }
+  },
+  {
     "id": "itscoupons-admin",
     "startUrl": "https://www.itscoupons.com/auth/login",
     "resourcePolicy": {

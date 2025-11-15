@@ -100,7 +100,19 @@ export async function applySavedStorage(page, session, originUrl) {
       }
     });
     if (filtered.length) {
-      await page.setCookie(...filtered);
+      // Clean up incompatible cookie properties
+      const cleanedCookies = filtered.map(cookie => {
+        const cleaned = { ...cookie };
+        delete cleaned.partitionKey;
+        delete cleaned.sourcePort;
+        delete cleaned.sourceScheme;
+        return cleaned;
+      });
+      try {
+        await page.setCookie(...cleanedCookies);
+      } catch (err) {
+        console.warn("[sessionManager] cookie restore warning:", err.message);
+      }
     }
   }
 

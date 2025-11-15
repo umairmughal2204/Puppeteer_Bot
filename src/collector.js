@@ -121,6 +121,25 @@ export async function runCollector({ profileId, site, settings, runId }) {
     browser = await puppeteer.launch(launchOptions);
     const [page] = await browser.pages();
 
+    // Block CloudFlare challenge resources BEFORE any navigation
+    await page.setRequestInterception(true).catch(() => {});
+    page.on("request", (request) => {
+      const url = request.url();
+      // Block CloudFlare challenge resources
+      if (
+        url.includes("/cdn-cgi/challenge-platform/") ||
+        (url.includes("/cdn-cgi/") && url.includes("/js/")) ||
+        url.includes("challenges.cloudflare.com")
+      ) {
+        request.abort().catch(() => {});
+      } else {
+        request.continue().catch(() => {});
+      }
+    });
+
+    // Disable JavaScript to avoid CloudFlare detection
+    await page.setJavaScriptEnabled(false);
+
     await applyFingerprint(page, fingerprint);
     await applyResourcePolicy(page, site, settings);
 
@@ -129,6 +148,9 @@ export async function runCollector({ profileId, site, settings, runId }) {
       waitUntil: "networkidle2",
       timeout: settings.collectorTimeoutSec * 1000
     });
+
+    // Re-enable JavaScript after navigation
+    await page.setJavaScriptEnabled(true);
 
     await randomIdleDelay(settings);
 

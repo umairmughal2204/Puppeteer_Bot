@@ -68,6 +68,26 @@ async function performActionStep(page, sessionDir, step) {
       }
       await humanType(page, step.selector, step.text, { clear: step.clear });
       break;
+    case "key":
+      if (!step.key) throw new Error("key action requires key property");
+      // Handle modifier+key combinations like "Control+Enter"
+      const keyParts = step.key.split("+");
+      if (keyParts.length > 1) {
+        // Press modifiers down
+        for (let i = 0; i < keyParts.length - 1; i++) {
+          await page.keyboard.down(keyParts[i]);
+        }
+        // Press the main key
+        await page.keyboard.press(keyParts[keyParts.length - 1]);
+        // Release modifiers
+        for (let i = keyParts.length - 2; i >= 0; i--) {
+          await page.keyboard.up(keyParts[i]);
+        }
+      } else {
+        await page.keyboard.press(step.key);
+      }
+      await waitMs(50);
+      break;
     case "screenshot": {
       const filename = step.filename ?? `action-${Date.now()}.png`;
       const filePath = path.join(sessionDir, filename);
@@ -112,13 +132,35 @@ export async function runAction({ profileId, site, settings, steps, index = 0, r
     browser = await puppeteer.launch(launchOptions);
     const [page] = await browser.pages();
 
+    // Block CloudFlare challenge resources BEFORE navigation
+    await page.setRequestInterception(true).catch(() => {});
+    page.on("request", (request) => {
+      const url = request.url();
+      // Block CloudFlare challenge resources and detection scripts
+      if (
+        url.includes("/cdn-cgi/challenge-platform/") ||
+        (url.includes("/cdn-cgi/") && url.includes("/js/")) ||
+        url.includes("challenges.cloudflare.com")
+      ) {
+        request.abort().catch(() => {});
+      } else {
+        request.continue().catch(() => {});
+      }
+    });
+
+    // Disable JavaScript temporarily to avoid CloudFlare detection
+    await page.setJavaScriptEnabled(false);
+
     await applyFingerprint(page, fingerprint);
 
     console.log(`[action:${profileId}] initial navigation to ${site.startUrl}`);
     await page.goto(site.startUrl, {
-      waitUntil: "domcontentloaded",
+      waitUntil: "networkidle2",
       timeout: settings.actionTimeoutSec * 1000
     });
+
+    // Re-enable JavaScript after navigation
+    await page.setJavaScriptEnabled(true);
 
     await applySavedStorage(page, session, site.startUrl);
     await page.reload({ waitUntil: "networkidle2" });

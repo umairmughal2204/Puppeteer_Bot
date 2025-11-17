@@ -39,7 +39,11 @@ Scaling focuses on distributing workload while respecting host resource limits.
    Confirms that collectors can save sessions and actions can replay them.
 3. **Scale-Up**
    ```bash
-   node src/controller.js start --collectors=40 --visible=10 --run-id prod-$(date +%s) --run-once=false
+   -- For Windows:
+   node src/controller.js start --collectors=40 --visible=10 --run-id (Get-Date -UFormat %s)
+   -- For Linux/Unix:
+   node src/controller.js start --collectors=40 --visible=10 --run-id prod-$(date +%s)
+   --run-once=false
    ```
    - The controller derives swap cycles from `collectorSessionDurationSec` / `collectorSwapIntervalSec` and their action equivalents whenever `enableScheduling` is true and `--run-once=false`.
    - Use `--collector-cycles` / `--action-cycles` to cap cycles during tests.

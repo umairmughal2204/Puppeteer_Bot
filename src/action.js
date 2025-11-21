@@ -25,8 +25,12 @@ function getScreenDimensions() {
     if (osPlatform === "win32") {
       // Windows: Use PowerShell to get screen resolution
       try {
-        const psScript = 'Add-Type -AssemblyName System.Windows.Forms; $s = [System.Windows.Forms.Screen]::PrimaryScreen; "$($s.Bounds.Width)x$($s.Bounds.Height)"';
-        const output = execSync(`powershell -Command "${psScript}"`, { encoding: "utf-8", stdio: ["pipe", "pipe", "ignore"] }).trim();
+        // Use -EncodedCommand to avoid quote escaping issues completely
+        // Convert script to UTF-16LE base64 encoded string
+        const psScript = 'Add-Type -AssemblyName System.Windows.Forms; $s = [System.Windows.Forms.Screen]::PrimaryScreen; Write-Output ($s.Bounds.Width.ToString() + "x" + $s.Bounds.Height.ToString())';
+        const psBytes = Buffer.from(psScript, 'utf16le');
+        const encodedCommand = psBytes.toString('base64');
+        const output = execSync(`powershell -NoProfile -EncodedCommand ${encodedCommand}`, { encoding: "utf-8", stdio: ["pipe", "pipe", "ignore"] }).trim();
         // Parse output like: 1920x1080
         const match = output.match(/(\d+)x(\d+)/);
         if (match) {
@@ -89,6 +93,7 @@ function calculateGridLayout(visibleCount, screenDims) {
   const availableHeight = screenDims.height - (margin * 2);
 
   // Calculate optimal grid dimensions to fill the screen
+  // For 2 windows, prefer vertical layout (1 column, 2 rows)
   let bestCols = 1;
   let bestRows = 1;
   let bestScore = -1;
@@ -116,10 +121,18 @@ function calculateGridLayout(visibleCount, screenDims) {
     const heightUsage = totalGridHeight / availableHeight;
     
     // Prefer grids that fill more of the screen (higher score is better)
-    // Also prefer grids closer to square (more balanced)
-    const fillScore = (widthUsage + heightUsage) / 2;
-    const balanceScore = 1 - Math.abs(testCols - testRows) / Math.max(testCols, testRows);
-    const score = fillScore * 0.8 + balanceScore * 0.2;
+    // For 2 windows, strongly prefer vertical layout (1 col, 2 rows)
+    let score = (widthUsage + heightUsage) / 2;
+    
+    // Boost score for vertical layout when count is 2
+    if (visibleCount === 2 && testCols === 1 && testRows === 2) {
+      score += 0.5; // Strong preference for vertical
+    }
+    
+    // Slight preference for vertical layouts in general (taller windows)
+    if (testCols <= testRows) {
+      score += 0.1;
+    }
 
     if (score > bestScore) {
       bestScore = score;
@@ -176,38 +189,59 @@ function computeWindowArgs(index, settings, viewport) {
   // Check if this is the last column in its row
   const isLastCol = col === cols - 1;
   
-  // Calculate window width
-  // Last column in any row fills remaining width to avoid gaps
-  const adjustedWindowWidth = isLastCol 
-    ? availableWidth - (col * baseWindowWidth)  // Fill remaining width
-    : baseWindowWidth;
-    
-  // Calculate window height: last row fills remaining space to avoid gaps
-  const adjustedWindowHeight = isLastRow
-    ? availableHeight - (row * baseWindowHeight)  // Fill remaining height
-    : baseWindowHeight;
-  
-  // Validate window sizes
-  if (adjustedWindowWidth < 200 || adjustedWindowHeight < 150) {
-    console.warn(`[action:grid] Warning: Window ${index} (row ${row}, col ${col}) size is very small: ${adjustedWindowWidth}×${adjustedWindowHeight}`);
-  }
-
-  // Calculate viewport size (window minus chrome)
-  // This must match the actual window size minus chrome, no minimums enforced
-  const actualViewportWidth = Math.max(1, adjustedWindowWidth - chromeBorder);
-  const actualViewportHeight = Math.max(1, adjustedWindowHeight - chromeTopBar);
-
   // Position windows to fill the screen (start from margin, no gaps)
-  // Use baseWindowWidth/Height for positioning to ensure proper grid alignment
   const startX = margin;
   const startY = margin;
   const left = startX + (col * baseWindowWidth);
   const top = startY + (row * baseWindowHeight);
 
-  // Ensure valid visible position (clamp if needed)
-  const pos = safePosition(left, top, adjustedWindowWidth, adjustedWindowHeight, screenDims);
-  const finalLeft = pos.left;
-  const finalTop = pos.top;
+  // Calculate window width - last column fills remaining width
+  let finalWindowWidth = isLastCol 
+    ? availableWidth - (col * baseWindowWidth)  // Fill remaining width
+    : baseWindowWidth;
+    
+  // Calculate window height - last row fills remaining height
+  let finalWindowHeight = isLastRow
+    ? availableHeight - (row * baseWindowHeight)  // Fill remaining height
+    : baseWindowHeight;
+
+  // Ensure windows stay completely within screen bounds
+  // Calculate maximum position to keep window within screen
+  const maxLeft = Math.max(0, screenDims.width - finalWindowWidth);
+  const maxTop = Math.max(0, screenDims.height - finalWindowHeight);
+  
+  // Clamp position to ensure window stays within screen
+  let finalLeft = Math.max(0, Math.min(left, maxLeft));
+  let finalTop = Math.max(0, Math.min(top, maxTop));
+  
+  // If position was clamped, we might need to adjust size to fill remaining space
+  // But ensure we don't exceed screen bounds
+  const remainingWidth = screenDims.width - finalLeft;
+  const remainingHeight = screenDims.height - finalTop;
+  
+  // Ensure window size doesn't exceed remaining space
+  finalWindowWidth = Math.min(finalWindowWidth, remainingWidth);
+  finalWindowHeight = Math.min(finalWindowHeight, remainingHeight);
+  
+  // Ensure minimum window size
+  finalWindowWidth = Math.max(200, finalWindowWidth);
+  finalWindowHeight = Math.max(150, finalWindowHeight);
+  
+  // Final safety check: recalculate position if window would still overflow
+  const finalMaxLeft = Math.max(0, screenDims.width - finalWindowWidth);
+  const finalMaxTop = Math.max(0, screenDims.height - finalWindowHeight);
+  finalLeft = Math.max(0, Math.min(finalLeft, finalMaxLeft));
+  finalTop = Math.max(0, Math.min(finalTop, finalMaxTop));
+  
+  // Ensure minimum window size
+  if (finalWindowWidth < 200 || finalWindowHeight < 150) {
+    console.warn(`[action:grid] Warning: Window ${index} (row ${row}, col ${col}) size is very small: ${finalWindowWidth}×${finalWindowHeight}`);
+  }
+
+  // Calculate viewport size (window minus chrome)
+  // This must match the actual window size minus chrome, no minimums enforced
+  const actualViewportWidth = Math.max(1, finalWindowWidth - chromeBorder);
+  const actualViewportHeight = Math.max(1, finalWindowHeight - chromeTopBar);
 
   // Create adjusted viewport - MUST match window size minus chrome exactly
   // Do not enforce minimums that conflict with window size
@@ -220,35 +254,32 @@ function computeWindowArgs(index, settings, viewport) {
     isLandscape: viewport?.isLandscape ?? true
   };
 
-  // Debug logging for first window
+  // Debug logging for all windows to verify they're within bounds
+  const rightEdge = finalLeft + finalWindowWidth;
+  const bottomEdge = finalTop + finalWindowHeight;
+  const isWithinBounds = rightEdge <= screenDims.width && bottomEdge <= screenDims.height;
+  
   if (index === 0) {
-    console.log(`[action:grid] Window ${index}: position (${finalLeft}, ${finalTop}), size ${adjustedWindowWidth}×${adjustedWindowHeight}, viewport ${actualViewportWidth}×${actualViewportHeight}`);
+    console.log(`[action:grid] Screen dimensions: ${screenDims.width}×${screenDims.height}`);
+    console.log(`[action:grid] Grid layout: ${cols} columns × ${rows} rows`);
+    console.log(`[action:grid] Available space: ${availableWidth}×${availableHeight} (with ${margin}px margin)`);
+  }
+  
+  console.log(`[action:grid] Window ${index} (row ${row}, col ${col}): position (${finalLeft}, ${finalTop}), size ${finalWindowWidth}×${finalWindowHeight}, viewport ${actualViewportWidth}×${actualViewportHeight}`);
+  console.log(`[action:grid] Window ${index} bounds check: right=${rightEdge}/${screenDims.width}, bottom=${bottomEdge}/${screenDims.height}, within=${isWithinBounds}`);
+  
+  if (!isWithinBounds) {
+    console.error(`[action:grid] ERROR: Window ${index} exceeds screen bounds!`);
   }
 
   return {
     args: [
-      `--window-size=${adjustedWindowWidth},${adjustedWindowHeight}`,
+      `--window-size=${finalWindowWidth},${finalWindowHeight}`,
       `--window-position=${finalLeft},${finalTop}`
     ],
     adjustedViewport: adjustedViewport
   };
 }
-
-function safePosition(left, top, width, height, screenDims) {
-  const maxWidth = screenDims.width;
-  const maxHeight = screenDims.height;
-
-  // If window goes outside screen bounds, clamp it
-  if (left + width > maxWidth) left = Math.max(0, maxWidth - width);
-  if (top + height > maxHeight) top = Math.max(0, maxHeight - height);
-
-  // Prevent negative values
-  if (left < 0) left = 0;
-  if (top < 0) top = 0;
-
-  return { left, top };
-}
-
 
 async function performActionStep(page, sessionDir, step) {
   switch (step.type) {

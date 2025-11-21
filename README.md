@@ -42,13 +42,28 @@ sessions/        Output directory for collected browser sessions
    node src/controller.js stop
    ```
 
-### Demo Script
+### Demo Scripts
 
+**Basic Demo:**
 ```bash
 node scripts/demo.js
 ```
 
 Runs a short acceptance workflow: starts two collectors and one visible session, waits for completion, then prints session artifacts discovered.
+
+**Grid View Demo:**
+```bash
+node scripts/grid-demo.js [number-of-windows]
+```
+
+Demonstrates the dynamic grid layout feature. Opens multiple browser windows that automatically arrange themselves in a grid based on your screen size.
+
+Examples:
+- `node scripts/grid-demo.js 4` - Opens 4 windows in a 2×2 grid
+- `node scripts/grid-demo.js 6` - Opens 6 windows in a 3×2 or 2×3 grid
+- `node scripts/grid-demo.js 9` - Opens 9 windows in a 3×3 grid
+
+The grid automatically adapts to your screen resolution, ensuring all windows fit perfectly on your display.
 
 ## Configuration
 
@@ -100,6 +115,7 @@ Adjust values in `config/settings.json` to rotate fingerprints safely.
 ## Acceptance Criteria
 
 - `scripts/demo.js` produces at least two populated session folders.
-- `node src/controller.js start --visible=1` opens real browser windows in a grid arrangement.
+- `node src/controller.js start --visible=1` opens real browser windows in a dynamic grid arrangement that adapts to your screen size.
+- `node scripts/grid-demo.js 6` demonstrates the grid layout with multiple windows.
 - Editing `config/actions.json` changes the executed visible steps without code changes.
 - Scheduling durations (`collectorSessionDurationSec`, `collectorSwapIntervalSec`, etc.) can be tuned without modifying code.

@@ -1,38 +1,231 @@
 import path from "node:path";
+import { execSync } from "node:child_process";
+import { platform } from "node:os";
 import puppeteer from "puppeteer";
 import { buildFingerprint, applyFingerprint } from "./fingerprint.js";
 import { resolveSessionDir, restoreSession, applySavedStorage, saveSession, ensureDirectory } from "./sessionManager.js";
 import { humanClick, humanHover, humanScroll, humanType, waitMs } from "./humanize.js";
 
-function computeWindowArgs(index, settings, viewport) {
-  const cols = Math.ceil(Math.sqrt(settings.visibleCount || 1));
-  const rows = Math.ceil((settings.visibleCount || 1) / cols);
-  const view = viewport ?? settings.defaultViewport ?? { width: 1280, height: 720 };
+// Cache screen dimensions to avoid repeated OS calls
+let cachedScreenDimensions = null;
 
-  const windowWidth = view.width + 16;      // chrome border
-  const windowHeight = view.height + 88;    // chrome top bar
+// Cache grid layout calculation to ensure all windows use the same grid
+let cachedGridLayout = null;
 
-  const col = index % cols;
-  const row = Math.floor(index / cols);
+function getScreenDimensions() {
+  if (cachedScreenDimensions) {
+    return cachedScreenDimensions;
+  }
 
-  let left = col * windowWidth;
-  let top = row * windowHeight;
+  try {
+    const osPlatform = platform();
+    let width = 1920;
+    let height = 1080;
 
-  // Ensure valid visible position
-  const pos = safePosition(left, top, windowWidth, windowHeight);
-  left = pos.left;
-  top = pos.top;
+    if (osPlatform === "win32") {
+      // Windows: Use PowerShell to get screen resolution
+      try {
+        const psScript = 'Add-Type -AssemblyName System.Windows.Forms; $s = [System.Windows.Forms.Screen]::PrimaryScreen; "$($s.Bounds.Width)x$($s.Bounds.Height)"';
+        const output = execSync(`powershell -Command "${psScript}"`, { encoding: "utf-8", stdio: ["pipe", "pipe", "ignore"] }).trim();
+        // Parse output like: 1920x1080
+        const match = output.match(/(\d+)x(\d+)/);
+        if (match) {
+          width = parseInt(match[1], 10);
+          height = parseInt(match[2], 10);
+        }
+      } catch (err) {
+        console.warn("[action] Failed to get screen dimensions, using defaults:", err.message);
+      }
+    } else if (osPlatform === "darwin") {
+      // macOS: Use system_profiler
+      try {
+        const output = execSync("system_profiler SPDisplaysDataType | grep Resolution", { encoding: "utf-8" });
+        const match = output.match(/(\d+)\s*x\s*(\d+)/);
+        if (match) {
+          width = parseInt(match[1], 10);
+          height = parseInt(match[2], 10);
+        }
+      } catch (err) {
+        console.warn("[action] Failed to get screen dimensions, using defaults:", err.message);
+      }
+    } else {
+      // Linux: Use xrandr
+      try {
+        const output = execSync("xrandr | grep '\\*' | head -1", { encoding: "utf-8" });
+        const match = output.match(/(\d+)\s*x\s*(\d+)/);
+        if (match) {
+          width = parseInt(match[1], 10);
+          height = parseInt(match[2], 10);
+        }
+      } catch (err) {
+        console.warn("[action] Failed to get screen dimensions, using defaults:", err.message);
+      }
+    }
 
-  return [
-    `--window-size=${windowWidth},${windowHeight}`,
-    `--window-position=${left},${top}`
-  ];
+    cachedScreenDimensions = { width, height };
+    return cachedScreenDimensions;
+  } catch (err) {
+    console.warn("[action] Error getting screen dimensions, using defaults:", err.message);
+    return { width: 1920, height: 1080 };
+  }
 }
 
-function safePosition(left, top, width, height) {
-  // Get screen resolution from puppeteer or OS defaults
-  const maxWidth = 1920;  
-  const maxHeight = 1080; 
+function calculateGridLayout(visibleCount, screenDims) {
+  // Check cache first
+  const cacheKey = `${visibleCount}-${screenDims.width}-${screenDims.height}`;
+  if (cachedGridLayout && cachedGridLayout.cacheKey === cacheKey) {
+    return cachedGridLayout;
+  }
+
+  // Account for Chrome window chrome (borders, title bar, etc.)
+  const chromeBorder = 16;
+  const chromeTopBar = 88;
+
+  // Use full screen with minimal margins (just taskbar/OS UI)
+  const margin = 20; // Small margin to avoid OS UI overlap
+  const availableWidth = screenDims.width - (margin * 2);
+  const availableHeight = screenDims.height - (margin * 2);
+
+  // Calculate optimal grid dimensions to fill the screen
+  let bestCols = 1;
+  let bestRows = 1;
+  let bestScore = -1;
+
+  // Try different grid configurations
+  for (let testCols = 1; testCols <= visibleCount; testCols++) {
+    const testRows = Math.ceil(visibleCount / testCols);
+    if (testCols * testRows < visibleCount) continue;
+
+    // Calculate window size for this grid (fill available space)
+    const testWindowWidth = Math.floor(availableWidth / testCols);
+    const testWindowHeight = Math.floor(availableHeight / testRows);
+    
+    // Calculate viewport size (window minus chrome)
+    const testViewportWidth = testWindowWidth - chromeBorder;
+    const testViewportHeight = testWindowHeight - chromeTopBar;
+
+    // Skip if viewport would be too small
+    if (testViewportWidth < 300 || testViewportHeight < 200) continue;
+
+    // Calculate how much of the screen this grid uses
+    const totalGridWidth = testCols * testWindowWidth;
+    const totalGridHeight = testRows * testWindowHeight;
+    const widthUsage = totalGridWidth / availableWidth;
+    const heightUsage = totalGridHeight / availableHeight;
+    
+    // Prefer grids that fill more of the screen (higher score is better)
+    // Also prefer grids closer to square (more balanced)
+    const fillScore = (widthUsage + heightUsage) / 2;
+    const balanceScore = 1 - Math.abs(testCols - testRows) / Math.max(testCols, testRows);
+    const score = fillScore * 0.8 + balanceScore * 0.2;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestCols = testCols;
+      bestRows = testRows;
+    }
+  }
+
+  const cols = bestCols;
+  const rows = bestRows;
+
+  // Calculate base window sizes
+  const baseWindowWidth = Math.floor(availableWidth / cols);
+  const baseWindowHeight = Math.floor(availableHeight / rows);
+
+  const layout = {
+    cacheKey,
+    cols,
+    rows,
+    margin,
+    availableWidth,
+    availableHeight,
+    baseWindowWidth,
+    baseWindowHeight,
+    chromeBorder,
+    chromeTopBar
+  };
+
+  cachedGridLayout = layout;
+  return layout;
+}
+
+function computeWindowArgs(index, settings, viewport) {
+  const screenDims = getScreenDimensions();
+  const visibleCount = settings.visibleCount || 1;
+  
+  // Calculate grid layout (cached, so all windows use same grid)
+  const grid = calculateGridLayout(visibleCount, screenDims);
+  
+  const { cols, rows, margin, availableWidth, availableHeight, baseWindowWidth, baseWindowHeight, chromeBorder, chromeTopBar } = grid;
+
+  // Calculate position in grid
+  const col = index % cols;
+  const row = Math.floor(index / cols);
+  
+  // Check if this is the last row (might be partial)
+  const isLastRow = row === rows - 1;
+  // Check if this is the last column in its row
+  const isLastCol = col === cols - 1;
+  
+  // Calculate how many windows are in this row
+  const windowsInThisRow = isLastRow 
+    ? visibleCount - (row * cols)  // Last row might be partial
+    : cols;  // Other rows are complete
+  
+  // Calculate window width
+  // Last column in any row fills remaining width
+  const adjustedWindowWidth = isLastCol 
+    ? availableWidth - (col * baseWindowWidth)  // Fill remaining width
+    : baseWindowWidth;
+    
+  // Calculate window height: last row fills remaining space
+  const adjustedWindowHeight = isLastRow
+    ? availableHeight - (row * baseWindowHeight)  // Fill remaining height
+    : baseWindowHeight;
+  
+  // Validate window sizes
+  if (adjustedWindowWidth < 200 || adjustedWindowHeight < 150) {
+    console.warn(`[action:grid] Warning: Window ${index} (row ${row}, col ${col}) size is very small: ${adjustedWindowWidth}×${adjustedWindowHeight}`);
+  }
+
+  // Calculate viewport size (window minus chrome)
+  const actualViewportWidth = adjustedWindowWidth - chromeBorder;
+  const actualViewportHeight = adjustedWindowHeight - chromeTopBar;
+
+  // Position windows to fill the screen (start from margin, no gaps)
+  const startX = margin;
+  const startY = margin;
+  const left = startX + (col * baseWindowWidth);
+  const top = startY + (row * baseWindowHeight);
+
+  // Ensure valid visible position
+  const pos = safePosition(left, top, adjustedWindowWidth, adjustedWindowHeight, screenDims);
+  const finalLeft = pos.left;
+  const finalTop = pos.top;
+
+  // Create adjusted viewport
+  const adjustedViewport = {
+    width: Math.max(400, actualViewportWidth),
+    height: Math.max(300, actualViewportHeight),
+    deviceScaleFactor: viewport?.deviceScaleFactor ?? 1,
+    isMobile: viewport?.isMobile ?? false,
+    hasTouch: viewport?.hasTouch ?? false,
+    isLandscape: viewport?.isLandscape ?? true
+  };
+
+  return {
+    args: [
+      `--window-size=${adjustedWindowWidth},${adjustedWindowHeight}`,
+      `--window-position=${finalLeft},${finalTop}`
+    ],
+    adjustedViewport: adjustedViewport
+  };
+}
+
+function safePosition(left, top, width, height, screenDims) {
+  const maxWidth = screenDims.width;
+  const maxHeight = screenDims.height;
 
   // If window goes outside screen bounds, clamp it
   if (left + width > maxWidth) left = Math.max(0, maxWidth - width);
@@ -106,11 +299,24 @@ export async function runAction({ profileId, site, settings, steps, index = 0, r
   const session = await restoreSession(sessionDir);
   const fingerprint = buildFingerprint(settings, session.meta?.fingerprint ?? null);
 
-  const windowArgs = computeWindowArgs(index, settings, fingerprint.viewport);
+  const windowConfig = computeWindowArgs(index, settings, fingerprint.viewport);
+  const viewport = windowConfig.adjustedViewport || fingerprint.viewport;
+  
+  // Always update fingerprint with adjusted viewport for grid layout
+  fingerprint.viewport = viewport;
+  
+  // Log grid info for debugging (only once, when first window is calculated)
+  if (index === 0 && cachedGridLayout) {
+    const screenDims = getScreenDimensions();
+    console.log(`[action:grid] Screen: ${screenDims.width}x${screenDims.height}`);
+    console.log(`[action:grid] Grid: ${cachedGridLayout.cols} columns × ${cachedGridLayout.rows} rows for ${settings.visibleCount || 1} windows`);
+    console.log(`[action:grid] Window size: ${cachedGridLayout.baseWindowWidth}×${cachedGridLayout.baseWindowHeight} (base)`);
+    console.log(`[action:grid] Available space: ${cachedGridLayout.availableWidth}×${cachedGridLayout.availableHeight}`);
+  }
 
   const launchOptions = {
     headless: headlessOverride ?? false,
-    defaultViewport: fingerprint.viewport,
+    defaultViewport: viewport,
     ignoreHTTPSErrors: true,
     args: [
       "--disable-blink-features=AutomationControlled",
@@ -118,7 +324,7 @@ export async function runAction({ profileId, site, settings, steps, index = 0, r
       "--use-fake-ui-for-media-stream",
       "--no-default-browser-check",
       "--no-first-run",
-      ...windowArgs
+      ...windowConfig.args
     ]
   };
 

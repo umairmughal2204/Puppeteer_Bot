@@ -33,6 +33,20 @@
     "resourcePolicy": {
       "allowedResourceTypes": ["document", "script", "stylesheet", "xhr", "fetch"]
     }
+  },
+  {
+    "id": "google-search",
+    "startUrl": "https://www.google.com",
+    "resourcePolicy": {
+      "allowedResourceTypes": ["document", "script", "stylesheet", "xhr", "fetch"]
+    }
+  },
+  {
+    "id": "youtube-channel",
+    "startUrl": "https://www.youtube.com",
+    "resourcePolicy": {
+      "allowedResourceTypes": ["document", "script", "stylesheet", "xhr", "fetch"]
+    }
   }
 ]
 

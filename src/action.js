@@ -78,8 +78,10 @@ function calculateGridLayout(visibleCount, screenDims) {
   }
 
   // Account for Chrome window chrome (borders, title bar, etc.)
-  const chromeBorder = 16;
-  const chromeTopBar = 88;
+  // On Windows, Chrome has minimal borders but significant title bar
+  const osPlatform = platform();
+  const chromeBorder = osPlatform === "win32" ? 0 : 16; // Windows has no visible border
+  const chromeTopBar = osPlatform === "win32" ? 80 : 88; // Title bar height
 
   // Use full screen with minimal margins (just taskbar/OS UI)
   const margin = 20; // Small margin to avoid OS UI overlap
@@ -154,6 +156,12 @@ function computeWindowArgs(index, settings, viewport) {
   const screenDims = getScreenDimensions();
   const visibleCount = settings.visibleCount || 1;
   
+  // Validate index is within bounds
+  if (index >= visibleCount) {
+    console.warn(`[action:grid] Warning: Index ${index} is >= visibleCount ${visibleCount}, using index 0`);
+    index = 0;
+  }
+  
   // Calculate grid layout (cached, so all windows use same grid)
   const grid = calculateGridLayout(visibleCount, screenDims);
   
@@ -168,18 +176,13 @@ function computeWindowArgs(index, settings, viewport) {
   // Check if this is the last column in its row
   const isLastCol = col === cols - 1;
   
-  // Calculate how many windows are in this row
-  const windowsInThisRow = isLastRow 
-    ? visibleCount - (row * cols)  // Last row might be partial
-    : cols;  // Other rows are complete
-  
   // Calculate window width
-  // Last column in any row fills remaining width
+  // Last column in any row fills remaining width to avoid gaps
   const adjustedWindowWidth = isLastCol 
     ? availableWidth - (col * baseWindowWidth)  // Fill remaining width
     : baseWindowWidth;
     
-  // Calculate window height: last row fills remaining space
+  // Calculate window height: last row fills remaining space to avoid gaps
   const adjustedWindowHeight = isLastRow
     ? availableHeight - (row * baseWindowHeight)  // Fill remaining height
     : baseWindowHeight;
@@ -190,29 +193,37 @@ function computeWindowArgs(index, settings, viewport) {
   }
 
   // Calculate viewport size (window minus chrome)
-  const actualViewportWidth = adjustedWindowWidth - chromeBorder;
-  const actualViewportHeight = adjustedWindowHeight - chromeTopBar;
+  // This must match the actual window size minus chrome, no minimums enforced
+  const actualViewportWidth = Math.max(1, adjustedWindowWidth - chromeBorder);
+  const actualViewportHeight = Math.max(1, adjustedWindowHeight - chromeTopBar);
 
   // Position windows to fill the screen (start from margin, no gaps)
+  // Use baseWindowWidth/Height for positioning to ensure proper grid alignment
   const startX = margin;
   const startY = margin;
   const left = startX + (col * baseWindowWidth);
   const top = startY + (row * baseWindowHeight);
 
-  // Ensure valid visible position
+  // Ensure valid visible position (clamp if needed)
   const pos = safePosition(left, top, adjustedWindowWidth, adjustedWindowHeight, screenDims);
   const finalLeft = pos.left;
   const finalTop = pos.top;
 
-  // Create adjusted viewport
+  // Create adjusted viewport - MUST match window size minus chrome exactly
+  // Do not enforce minimums that conflict with window size
   const adjustedViewport = {
-    width: Math.max(400, actualViewportWidth),
-    height: Math.max(300, actualViewportHeight),
+    width: actualViewportWidth,
+    height: actualViewportHeight,
     deviceScaleFactor: viewport?.deviceScaleFactor ?? 1,
     isMobile: viewport?.isMobile ?? false,
     hasTouch: viewport?.hasTouch ?? false,
     isLandscape: viewport?.isLandscape ?? true
   };
+
+  // Debug logging for first window
+  if (index === 0) {
+    console.log(`[action:grid] Window ${index}: position (${finalLeft}, ${finalTop}), size ${adjustedWindowWidth}×${adjustedWindowHeight}, viewport ${actualViewportWidth}×${actualViewportHeight}`);
+  }
 
   return {
     args: [
@@ -300,7 +311,13 @@ export async function runAction({ profileId, site, settings, steps, index = 0, r
   const fingerprint = buildFingerprint(settings, session.meta?.fingerprint ?? null);
 
   const windowConfig = computeWindowArgs(index, settings, fingerprint.viewport);
-  const viewport = windowConfig.adjustedViewport || fingerprint.viewport;
+  let viewport = windowConfig.adjustedViewport || fingerprint.viewport;
+  
+  // Ensure viewport is valid (has width and height)
+  if (!viewport || !viewport.width || !viewport.height) {
+    console.warn(`[action:${profileId}] Invalid viewport, using defaults`);
+    viewport = { width: 1280, height: 720, deviceScaleFactor: 1, isMobile: false, hasTouch: false, isLandscape: true };
+  }
   
   // Always update fingerprint with adjusted viewport for grid layout
   fingerprint.viewport = viewport;

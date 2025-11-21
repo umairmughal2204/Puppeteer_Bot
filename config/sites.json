@@ -1,12 +1,5 @@
 [
   {
-    "id": "demo-example",
-    "startUrl": "https://example.com",
-    "resourcePolicy": {
-      "allowedResourceTypes": ["document", "script", "xhr", "fetch"]
-    }
-  },
-  {
     "id": "iana-domains",
     "startUrl": "https://www.iana.org/domains/example",
     "resourcePolicy": {

@@ -1,10 +1,4 @@
 {
-  "demo-example": [
-    { "type": "wait", "ms": 1500 },
-    { "type": "scroll", "distance": 600, "durationMs": 1500 },
-    { "type": "hover", "selector": "h1" },
-    { "type": "screenshot", "filename": "after-scroll.png" }
-  ],
   "iana-domains": [
     { "type": "wait", "ms": 1200 },
     { "type": "click", "selector": "a[href='/domains/reserved']", "human": true },

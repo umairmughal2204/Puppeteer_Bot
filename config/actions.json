@@ -12,11 +12,6 @@
     { "type": "scroll", "distance": 800, "durationMs": 1600 },
     { "type": "screenshot", "filename": "reserved.png" }
   ],
-  "httpbin-cookies": [
-    { "type": "wait", "ms": 1500 },
-    { "type": "hover", "selector": "body" },
-    { "type": "screenshot", "filename": "cookie-page.png" }
-  ],
   "chatgpt-conversation": [
     { "type": "wait", "ms": 2000 },
     { "type": "screenshot", "filename": "01-chatgpt-page.png" },

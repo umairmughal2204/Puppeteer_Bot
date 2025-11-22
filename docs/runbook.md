@@ -35,6 +35,8 @@ Scaling focuses on distributing workload while respecting host resource limits.
 2. **Warm-Up Run**
    ```bash
    node scripts/demo.js
+   or 
+   node src/controller.js start --collectors=4 --visible=4 --run-id (Get-Date -UFormat %s)
    ```
    Confirms that collectors can save sessions and actions can replay them.
 3. **Scale-Up**

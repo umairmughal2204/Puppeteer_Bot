@@ -25,7 +25,7 @@
     { "type": "wait", "ms": 5000 },
     { "type": "screenshot", "filename": "04-response-3.png" },
     { "type": "type", "selector": "textarea", "text": "Tell me about natural language processing" },
-    { "type": "wait", "ms": 800 },
+    { "type": "wait", "ms": 1200 },
     { "type": "key", "key": "Control+Enter" },
     { "type": "wait", "ms": 5000 },
     { "type": "screenshot", "filename": "05-response-4.png" },

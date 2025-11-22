@@ -44,19 +44,6 @@
     { "type": "scroll", "distance": 800, "durationMs": 1500 },
     { "type": "screenshot", "filename": "dashboard.png" }
   ],
-  "google-search": [
-    { "type": "wait", "ms": 2000 },
-    { "type": "screenshot", "filename": "01-google-home.png" },
-    { "type": "type", "selector": "textarea[name='q'], input[name='q'], textarea[aria-label*='Search'], input[aria-label*='Search']", "text": "puppeteer automation tutorial", "clear": true },
-    { "type": "wait", "ms": 1000 },
-    { "type": "key", "key": "Enter" },
-    { "type": "wait", "ms": 3000 },
-    { "type": "screenshot", "filename": "02-search-results.png" },
-    { "type": "scroll", "distance": 600, "durationMs": 1500 },
-    { "type": "wait", "ms": 1000 },
-    { "type": "hover", "selector": "h3", "dwellMs": 800 },
-    { "type": "screenshot", "filename": "03-after-scroll.png" }
-  ],
   "youtube-channel": [
     { "type": "wait", "ms": 3000 },
     { "type": "screenshot", "filename": "01-youtube-home.png" },

@@ -17,8 +17,8 @@ async function runControllerStart() {
     [
       "src/controller.js",
       "start",
-      "--collectors=5",
-      "--visible=5",
+      "--collectors=4",
+      "--visible=4",
       "--collector-cycles=1",
       "--action-cycles=1",
       "--run-id",

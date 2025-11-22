@@ -282,6 +282,16 @@ function computeWindowArgs(index, settings, viewport) {
 }
 
 async function performActionStep(page, sessionDir, step) {
+  // Helper function to check if element exists
+  async function elementExists(selector) {
+    try {
+      const element = await page.$(selector);
+      return element !== null;
+    } catch {
+      return false;
+    }
+  }
+
   switch (step.type) {
     case "wait":
       await waitMs(step.ms ?? 1000);
@@ -291,17 +301,69 @@ async function performActionStep(page, sessionDir, step) {
       break;
     case "click":
       if (!step.selector) throw new Error("click action requires selector");
-      await humanClick(page, step.selector, { afterDelayMs: step.afterDelayMs });
+      // Try multiple selectors (comma-separated) until one works
+      const clickSelectors = step.selector.split(',').map(s => s.trim());
+      let clickSuccess = false;
+      for (const selector of clickSelectors) {
+        try {
+          const exists = await elementExists(selector);
+          if (exists) {
+            await humanClick(page, selector, { afterDelayMs: step.afterDelayMs });
+            clickSuccess = true;
+            break;
+          }
+        } catch (err) {
+          // Try next selector
+          continue;
+        }
+      }
+      if (!clickSuccess) {
+        if (step.optional) {
+          console.log(`[action] Optional click skipped: no matching element found for selectors: ${clickSelectors.join(', ')}`);
+        } else {
+          throw new Error(`No matching element found for click action with selectors: ${clickSelectors.join(', ')}`);
+        }
+      }
       break;
     case "hover":
       if (!step.selector) throw new Error("hover action requires selector");
+      // Check if element exists before hovering (for optional actions)
+      if (step.optional) {
+        const exists = await elementExists(step.selector);
+        if (!exists) {
+          console.log(`[action] Optional hover skipped: element not found for selector: ${step.selector}`);
+          break;
+        }
+      }
       await humanHover(page, step.selector, step.dwellMs ?? 600);
       break;
     case "type":
       if (!step.selector || typeof step.text !== "string") {
         throw new Error("type action requires selector and text");
       }
-      await humanType(page, step.selector, step.text, { clear: step.clear });
+      // Try multiple selectors (comma-separated) until one works
+      const typeSelectors = step.selector.split(',').map(s => s.trim());
+      let typeSuccess = false;
+      for (const selector of typeSelectors) {
+        try {
+          const exists = await elementExists(selector);
+          if (exists) {
+            await humanType(page, selector, step.text, { clear: step.clear });
+            typeSuccess = true;
+            break;
+          }
+        } catch (err) {
+          // Try next selector
+          continue;
+        }
+      }
+      if (!typeSuccess) {
+        if (step.optional) {
+          console.log(`[action] Optional type skipped: no matching element found for selectors: ${typeSelectors.join(', ')}`);
+        } else {
+          throw new Error(`No matching element found for type action with selectors: ${typeSelectors.join(', ')}`);
+        }
+      }
       break;
     case "key":
       if (!step.key) throw new Error("key action requires key property");

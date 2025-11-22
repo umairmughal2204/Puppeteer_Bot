@@ -47,7 +47,11 @@
   "youtube-channel": [
     { "type": "wait", "ms": 3000 },
     { "type": "screenshot", "filename": "01-youtube-home.png" },
-    { "type": "type", "selector": "input[name='search_query'], input[id='search'], input[placeholder*='Search']", "text": "MrBeast", "clear": true },
+    { "type": "click", "selector": "ytd-masthead button[aria-label*='Close'], button[aria-label*='Close menu'], #guide-button", "optional": true, "afterDelayMs": 500 },
+    { "type": "wait", "ms": 500 },
+    { "type": "click", "selector": "#search-button-narrow, button[aria-label*='Search'], button[id*='search'], #search-icon-legacy, ytd-searchbox button, ytd-masthead button[aria-label*='Search']", "optional": true, "afterDelayMs": 1000 },
+    { "type": "wait", "ms": 1000 },
+    { "type": "type", "selector": "input[name='search_query'], input[id='search'], input[placeholder*='Search'], input[aria-label*='Search'], #search, ytd-searchbox input", "text": "MrBeast", "clear": true },
     { "type": "wait", "ms": 1000 },
     { "type": "key", "key": "Enter" },
     { "type": "wait", "ms": 3000 },
@@ -56,21 +60,6 @@
     { "type": "wait", "ms": 3000 },
     { "type": "screenshot", "filename": "03-channel-page.png" },
     { "type": "scroll", "distance": 800, "durationMs": 2000 },
-    { "type": "wait", "ms": 1500 },
-    { "type": "hover", "selector": "button[aria-label*='Subscribe'], button[aria-label*='subscribe'], #subscribe-button, ytd-subscribe-button-renderer button", "dwellMs": 1000 },
-    { "type": "wait", "ms": 500 },
-    { "type": "click", "selector": "button[aria-label*='Subscribe'], button[aria-label*='subscribe'], #subscribe-button, ytd-subscribe-button-renderer button", "afterDelayMs": 2000 },
-    { "type": "wait", "ms": 2000 },
-    { "type": "screenshot", "filename": "04-after-subscribe.png" },
-    { "type": "scroll", "distance": 1000, "durationMs": 2000 },
-    { "type": "wait", "ms": 1500 },
-    { "type": "click", "selector": "ytd-video-renderer, ytd-grid-video-renderer, #dismissible", "afterDelayMs": 2000 },
-    { "type": "wait", "ms": 4000 },
-    { "type": "screenshot", "filename": "05-video-page.png" },
-    { "type": "hover", "selector": "button[aria-label*='like'], button[aria-label*='Like'], #top-level-buttons ytd-toggle-button-renderer:first-child button", "dwellMs": 1000 },
-    { "type": "wait", "ms": 500 },
-    { "type": "click", "selector": "button[aria-label*='like'], button[aria-label*='Like'], #top-level-buttons ytd-toggle-button-renderer:first-child button", "afterDelayMs": 2000 },
-    { "type": "wait", "ms": 2000 },
-    { "type": "screenshot", "filename": "06-after-like.png" }
+    { "type": "screenshot", "filename": "04-channel-scrolled.png" }
   ]
 }
